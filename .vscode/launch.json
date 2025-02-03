@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Godot",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "D:/Godot/Godot_v4.3-stable_mono_win64.exe", // 替换为你的 Godot 安装路径
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "args": ["--path", "${workspaceRoot}"]
+        }
+    ]
+}
