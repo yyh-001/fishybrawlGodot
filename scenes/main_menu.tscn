@@ -127,12 +127,26 @@ layout_mode = 2
 text = "邀请组队"
 
 [node name="好友请求" type="VBoxContainer" parent="HBoxContainer/RightPanel/TabContainer"]
-visible = false
 layout_mode = 2
 
 [node name="RequestList" type="ItemList" parent="HBoxContainer/RightPanel/TabContainer/好友请求"]
 layout_mode = 2
 size_flags_vertical = 3
+select_mode = 1
+
+[node name="ButtonContainer" type="HBoxContainer" parent="HBoxContainer/RightPanel/TabContainer/好友请求"]
+layout_mode = 2
+alignment = 1
+
+[node name="AcceptButton" type="Button" parent="HBoxContainer/RightPanel/TabContainer/好友请求/ButtonContainer"]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+text = "接受"
+
+[node name="RejectButton" type="Button" parent="HBoxContainer/RightPanel/TabContainer/好友请求/ButtonContainer"]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+text = "拒绝"
 
 [node name="排行榜" type="VBoxContainer" parent="HBoxContainer/RightPanel/TabContainer"]
 visible = false

@@ -3,6 +3,7 @@ using System;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Collections.Generic;
+using SocketIOClient;
 
 public partial class MainMenu : Control
 {
@@ -25,6 +26,10 @@ public partial class MainMenu : Control
     private Button _cancelFriendRequestButton;
     private Label _myUserIdLabel;
     private Button _copyUserIdButton;
+    private ItemList _requestList;
+    private Dictionary<int, string> _requestIdMap = new Dictionary<int, string>();  // 存储请求ID映射
+    private Button _acceptRequestButton;
+    private Button _rejectRequestButton;
 
     public override async void _Ready()
     {
@@ -54,6 +59,13 @@ public partial class MainMenu : Control
         _myUserIdLabel = GetNode<Label>("AddFriendDialog/VBoxContainer/MyUserIdContainer/MyUserIdLabel");
         _copyUserIdButton = GetNode<Button>("AddFriendDialog/VBoxContainer/MyUserIdContainer/CopyButton");
 
+        // 获取好友请求列表引用
+        _requestList = GetNode<ItemList>("HBoxContainer/RightPanel/TabContainer/好友请求/RequestList");
+
+        // 获取好友请求按钮引用
+        _acceptRequestButton = GetNode<Button>("HBoxContainer/RightPanel/TabContainer/好友请求/ButtonContainer/AcceptButton");
+        _rejectRequestButton = GetNode<Button>("HBoxContainer/RightPanel/TabContainer/好友请求/ButtonContainer/RejectButton");
+
         // 连接按钮信号
         _quickMatchButton.Pressed += OnQuickMatchPressed;
         _createRoomButton.Pressed += OnCreateRoomPressed;
@@ -75,13 +87,35 @@ public partial class MainMenu : Control
         // 连接复制按钮信号
         _copyUserIdButton.Pressed += OnCopyUserIdPressed;
 
-        // 更新用户信息显示
-        UpdateUserInfo();
+        // 连接好友请求按钮信号
+        _acceptRequestButton.Pressed += OnAcceptRequestPressed;
+        _rejectRequestButton.Pressed += OnRejectRequestPressed;
 
         // 连接 WebSocket
         try 
         {
             await WebSocketManager.Instance.ConnectAsync();
+            
+            // 更新用户信息显示
+            UpdateUserInfo();
+            
+            // 连接成功后注册事件监听
+            GD.Print("开始注册 Socket.IO 事件监听器...");
+            
+            WebSocketManager.Instance.Socket.On("friendRequestReceived", response =>
+            {
+                GD.Print("触发好友请求事件监听器");
+                // 在主线程中处理UI更新
+                Callable.From(() => OnFriendRequestReceived(response)).CallDeferred();
+            });
+
+            WebSocketManager.Instance.Socket.On("friendRequestHandled", response =>
+            {
+                GD.Print("触发好友请求处理结果事件监听器");
+                Callable.From(() => OnFriendRequestHandled(response)).CallDeferred();
+            });
+            
+            GD.Print("Socket.IO 事件监听器注册完成");
             
             // 禁用按钮直到连接成功
             SetButtonsEnabled(true);
@@ -100,6 +134,15 @@ public partial class MainMenu : Control
     public override void _ExitTree()
     {
         base._ExitTree();
+        
+        // 取消注册事件监听器
+        if (WebSocketManager.Instance.Socket != null)
+        {
+            GD.Print("取消注册 Socket.IO 事件监听器");
+            WebSocketManager.Instance.Socket.Off("friendRequestReceived");
+            WebSocketManager.Instance.Socket.Off("friendRequestHandled");
+        }
+        
         // 断开 WebSocket 连接
         WebSocketManager.Instance.Disconnect();
     }
@@ -393,6 +436,156 @@ public partial class MainMenu : Control
         {
             DisplayServer.ClipboardSet(Global.Instance.UserInfo.userId);
             GD.Print("用户ID已复制到剪贴板");
+        }
+    }
+
+    private void OnFriendRequestReceived(SocketIOClient.SocketIOResponse response)
+    {
+        try
+        {
+            GD.Print("收到好友请求原始数据:", response.GetValue<object>().ToString());
+            
+            var data = response.GetValue<JsonElement>(0);
+            var requestId = data.GetProperty("requestId").GetString();
+            var fromUser = data.GetProperty("fromUser");
+            var userId = fromUser.GetProperty("userId").GetString();
+            var username = fromUser.GetProperty("username").GetString();
+            // message 是可选字段
+            string message = "请求添加您为好友";  // 默认消息
+            if (data.TryGetProperty("message", out var messageElement))
+            {
+                message = messageElement.GetString();
+            }
+            var timestamp = data.GetProperty("timestamp").GetString();
+
+            GD.Print($"===== 收到好友请求 =====");
+            GD.Print($"请求ID: {requestId}");
+            GD.Print($"发送者: {username} (ID: {userId})");
+            GD.Print($"消息内容: {message}");
+            GD.Print($"发送时间: {timestamp}");
+            GD.Print("======================");
+
+            // 添加到请求列表
+            var index = _requestList.AddItem($"来自 {username} 的好友请求: {message}");
+            _requestIdMap[index] = requestId;
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"处理好友请求失败: {e.Message}");
+            GD.PrintErr($"错误堆栈: {e.StackTrace}");
+        }
+    }
+
+    private void OnFriendRequestHandled(SocketIOClient.SocketIOResponse response)
+    {
+        try
+        {
+            GD.Print("收到好友请求处理结果原始数据:", response.GetValue<object>().ToString());
+            
+            var data = response.GetValue<JsonElement>();
+            var requestId = data.GetProperty("requestId").GetString();
+            var status = data.GetProperty("status").GetString();
+            var toUser = data.GetProperty("toUser");
+            var username = toUser.GetProperty("username").GetString();
+
+            GD.Print($"===== 好友请求处理结果 =====");
+            GD.Print($"请求ID: {requestId}");
+            GD.Print($"处理者: {username}");
+            GD.Print($"处理结果: {(status == "accepted" ? "接受" : "拒绝")}");
+            GD.Print("===========================");
+
+            // 如果请求被接受，刷新好友列表
+            if (status == "accepted")
+            {
+                GD.Print("好友请求已接受，正在刷新好友列表...");
+                Callable.From(GetFriendList).CallDeferred();
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"处理好友请求结果失败: {e.Message}");
+            GD.PrintErr($"错误堆栈: {e.StackTrace}");
+        }
+    }
+
+    private async Task HandleFriendRequest(string requestId, bool accept)
+    {
+        try
+        {
+            var requestData = new Dictionary<string, string>
+            {
+                ["requestId"] = requestId,
+                ["action"] = accept ? "accept" : "reject"  // 使用 action 字段，值为 accept 或 reject
+            };
+
+            var response = await WebSocketManager.Instance.EmitAsync("handleFriendRequest", requestData);
+            
+            if (response.TryGetValue("success", out var successValue) && (bool)successValue)
+            {
+                var data = response["data"].AsGodotDictionary();
+                var message = data["message"].AsString();
+                GD.Print($"处理好友请求成功: {message}");
+                
+                // 从列表中移除该请求
+                for (int i = 0; i < _requestList.ItemCount; i++)
+                {
+                    if (_requestIdMap.TryGetValue(i, out var id) && id == requestId)
+                    {
+                        _requestList.RemoveItem(i);
+                        _requestIdMap.Remove(i);
+                        break;
+                    }
+                }
+
+                // 如果接受了请求，刷新好友列表
+                if (accept)
+                {
+                    await GetFriendList();
+                }
+            }
+            else
+            {
+                string errorMessage = response.ContainsKey("error") ? 
+                    (string)response["error"] : $"处理好友请求失败";
+                ShowError(errorMessage);
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr("处理好友请求失败:", e.Message);
+            ShowError("处理好友请求失败");
+        }
+    }
+
+    private async void OnAcceptRequestPressed()
+    {
+        var selectedItems = _requestList.GetSelectedItems();
+        if (selectedItems.Length == 0)
+        {
+            ShowError("请先选择要处理的好友请求");
+            return;
+        }
+
+        var index = selectedItems[0];
+        if (_requestIdMap.TryGetValue(index, out string requestId))
+        {
+            await HandleFriendRequest(requestId, true);
+        }
+    }
+
+    private async void OnRejectRequestPressed()
+    {
+        var selectedItems = _requestList.GetSelectedItems();
+        if (selectedItems.Length == 0)
+        {
+            ShowError("请先选择要处理的好友请求");
+            return;
+        }
+
+        var index = selectedItems[0];
+        if (_requestIdMap.TryGetValue(index, out string requestId))
+        {
+            await HandleFriendRequest(requestId, false);
         }
     }
 } 
