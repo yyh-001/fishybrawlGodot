@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Collections.Generic;
 
 public partial class MainMenu : Control
 {
@@ -15,6 +16,8 @@ public partial class MainMenu : Control
     private Button _addFriendButton;
     private Button _inviteButton;
     private Button _refreshFriendListButton;
+    private PopupMenu _friendPopupMenu;
+    private Dictionary<int, string> _friendIdMap = new Dictionary<int, string>();  // 用于存储列表索引到好友ID的映射
 
     public override async void _Ready()
     {
@@ -30,6 +33,9 @@ public partial class MainMenu : Control
         _inviteButton = GetNode<Button>("HBoxContainer/RightPanel/TabContainer/好友/ButtonContainer/InviteButton");
         _refreshFriendListButton = GetNode<Button>("HBoxContainer/RightPanel/TabContainer/好友/ButtonContainer/RefreshButton");
 
+        // 获取右键菜单引用
+        _friendPopupMenu = GetNode<PopupMenu>("HBoxContainer/RightPanel/TabContainer/好友/FriendList/PopupMenu");
+
         // 连接按钮信号
         _quickMatchButton.Pressed += OnQuickMatchPressed;
         _createRoomButton.Pressed += OnCreateRoomPressed;
@@ -38,6 +44,10 @@ public partial class MainMenu : Control
         _addFriendButton.Pressed += OnAddFriendPressed;
         _inviteButton.Pressed += OnInvitePressed;
         _refreshFriendListButton.Pressed += OnRefreshFriendListPressed;
+
+        // 连接右键菜单信号
+        _friendList.GuiInput += OnFriendListGuiInput;
+        _friendPopupMenu.IdPressed += OnFriendPopupMenuItemSelected;
 
         // 更新用户信息显示
         UpdateUserInfo();
@@ -184,9 +194,12 @@ public partial class MainMenu : Control
                 var data = responseData["data"].AsGodotDictionary();
                 var friends = data["friends"].AsGodotArray();
 
+                _friendIdMap.Clear();  // 清空映射
+                int index = 0;
                 foreach (var friend in friends)
                 {
                     var friendData = friend.AsGodotDictionary();
+                    string userId = (string)friendData["userId"];
                     string username = (string)friendData["username"];
                     string status = (string)friendData["status"];
                     int rating = (int)friendData["rating"];
@@ -196,6 +209,8 @@ public partial class MainMenu : Control
                     
                     // 添加到列表中
                     _friendList.AddItem($"{statusIcon} {username} ({rating})");
+                    _friendIdMap[index] = userId;  // 保存映射
+                    index++;
                 }
             }
             else
@@ -226,5 +241,64 @@ public partial class MainMenu : Control
     private async void OnRefreshFriendListPressed()
     {
         await GetFriendList();
+    }
+
+    private void OnFriendListGuiInput(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton mouseButton && 
+            mouseButton.ButtonIndex == MouseButton.Right && 
+            mouseButton.Pressed)
+        {
+            var index = _friendList.GetItemAtPosition(mouseButton.Position);
+            if (index != -1)
+            {
+                _friendList.Select(index);
+                _friendPopupMenu.Position = (Vector2I)GetViewport().GetMousePosition();
+                _friendPopupMenu.Show();
+            }
+        }
+    }
+
+    private async void OnFriendPopupMenuItemSelected(long id)
+    {
+        if (id == 0)  // 删除好友
+        {
+            int selectedIdx = _friendList.GetSelectedItems()[0];
+            if (_friendIdMap.TryGetValue(selectedIdx, out string friendId))
+            {
+                await RemoveFriend(friendId);
+            }
+        }
+    }
+
+    private async Task RemoveFriend(string friendId)
+    {
+        try
+        {
+            // 使用字典而不是匿名对象
+            var requestData = new Dictionary<string, string>
+            {
+                ["friendId"] = friendId
+            };
+
+            var response = await WebSocketManager.Instance.EmitAsync("removeFriend", requestData);
+            
+            if (response.TryGetValue("success", out var successValue) && (bool)successValue)
+            {
+                GD.Print("好友删除成功");
+                await GetFriendList();
+            }
+            else
+            {
+                string errorMessage = response.ContainsKey("error") ? 
+                    (string)response["error"] : "删除好友失败";
+                ShowError(errorMessage);
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr("删除好友失败:", e.Message);
+            ShowError("删除好友失败");
+        }
     }
 } 

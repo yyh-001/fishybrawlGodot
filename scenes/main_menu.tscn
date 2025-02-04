@@ -104,6 +104,8 @@ layout_mode = 2
 [node name="FriendList" type="ItemList" parent="HBoxContainer/RightPanel/TabContainer/好友"]
 layout_mode = 2
 size_flags_vertical = 3
+select_mode = 1
+right_click_select = true
 
 [node name="ButtonContainer" type="HBoxContainer" parent="HBoxContainer/RightPanel/TabContainer/好友"]
 layout_mode = 2
@@ -138,4 +140,10 @@ layout_mode = 2
 
 [node name="RankingList" type="ItemList" parent="HBoxContainer/RightPanel/TabContainer/排行榜"]
 layout_mode = 2
-size_flags_vertical = 3 
+size_flags_vertical = 3
+
+[node name="PopupMenu" type="PopupMenu" parent="HBoxContainer/RightPanel/TabContainer/好友/FriendList"]
+visible = false
+item_count = 1
+item_0/text = "删除好友"
+item_0/id = 0 

@@ -4,6 +4,7 @@ using SocketIOClient;
 using SocketIOClient.Transport;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Collections.Generic;
 
 public class WebSocketManager
 {
@@ -85,7 +86,7 @@ public class WebSocketManager
 
     public SocketIOClient.SocketIO Socket => _socket;
 
-    public async Task<Godot.Collections.Dictionary> EmitAsync(string eventName)
+    public async Task<Godot.Collections.Dictionary> EmitAsync(string eventName, object data = null)
     {
         if (_socket == null)
         {
@@ -94,59 +95,38 @@ public class WebSocketManager
 
         try
         {
+            // 打印请求信息
+            if (data != null)
+            {
+                var jsonString = JsonSerializer.Serialize(data);
+                GD.Print($"发送 {eventName} 请求: {jsonString}");
+            }
+            else
+            {
+                GD.Print($"发送 {eventName} 请求");
+            }
+
             var tcs = new TaskCompletionSource<Godot.Collections.Dictionary>();
 
-            await _socket.EmitAsync(eventName, response =>
+            // 根据是否有数据选择不同的发送方式
+            if (data != null)
             {
-                try
+                // 将数据转换为字典
+                var jsonElement = JsonSerializer.SerializeToElement(data);
+                var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.ToString());
+                
+                await _socket.EmitAsync(eventName, response =>
                 {
-                    var result = new Godot.Collections.Dictionary();
-                    if (response != null)
-                    {
-                        // 打印原始响应数据
-                        GD.Print($"Raw response: {response}");
-                        
-                        // 获取响应数据
-                        var responseData = response.GetValue<JsonElement>(0);
-                        var jsonString = responseData.ToString();
-                        GD.Print($"Response JSON: {jsonString}");
-
-                        // 解析响应
-                        var responseObj = JsonSerializer.Deserialize<ResponseData>(jsonString);
-                        
-                        // 转换为 Godot Dictionary
-                        result["success"] = responseObj.success;
-                        if (responseObj.data != null)
-                        {
-                            var data = new Godot.Collections.Dictionary();
-                            if (responseObj.data.friends != null)
-                            {
-                                var friends = new Godot.Collections.Array();
-                                foreach (var friend in responseObj.data.friends)
-                                {
-                                    var friendDict = new Godot.Collections.Dictionary
-                                    {
-                                        ["userId"] = friend.userId,
-                                        ["username"] = friend.username,
-                                        ["rating"] = friend.rating,
-                                        ["status"] = friend.status,
-                                        ["lastOnline"] = friend.lastOnline
-                                    };
-                                    friends.Add(friendDict);
-                                }
-                                data["friends"] = friends;
-                            }
-                            result["data"] = data;
-                        }
-                    }
-                    tcs.TrySetResult(result);
-                }
-                catch (Exception e)
+                    HandleResponse(response, tcs);
+                }, dict);  // 作为最后一个参数传递
+            }
+            else
+            {
+                await _socket.EmitAsync(eventName, response =>
                 {
-                    tcs.TrySetException(e);
-                    GD.PrintErr($"Parse response failed: {e.Message}");
-                }
-            });
+                    HandleResponse(response, tcs);
+                });
+            }
 
             var timeoutTask = Task.Delay(5000);
             var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
@@ -165,16 +145,82 @@ public class WebSocketManager
         }
     }
 
+    private void HandleResponse(SocketIOResponse response, TaskCompletionSource<Godot.Collections.Dictionary> tcs)
+    {
+        try
+        {
+            var result = new Godot.Collections.Dictionary();
+            if (response != null)
+            {
+                // 获取响应数据
+                var responseData = response.GetValue<JsonElement>(0);
+                var jsonString = responseData.ToString();
+                
+                // 解析响应
+                var responseObj = JsonSerializer.Deserialize<ResponseData>(jsonString);
+                
+                // 转换为 Godot Dictionary
+                result["success"] = responseObj.success;
+                
+                if (!responseObj.success && !string.IsNullOrEmpty(responseObj.error))
+                {
+                    result["error"] = responseObj.error;
+                    GD.PrintErr($"请求失败: {responseObj.error}");
+                }
+                
+                if (responseObj.data != null)
+                {
+                    var data = new Godot.Collections.Dictionary();
+                    
+                    if (!string.IsNullOrEmpty(responseObj.data.message))
+                    {
+                        data["message"] = responseObj.data.message;
+                        GD.Print($"服务器消息: {responseObj.data.message}");
+                    }
+                    
+                    if (responseObj.data.friends != null)
+                    {
+                        var friends = new Godot.Collections.Array();
+                        foreach (var friend in responseObj.data.friends)
+                        {
+                            var friendDict = new Godot.Collections.Dictionary
+                            {
+                                ["userId"] = friend.userId,
+                                ["username"] = friend.username,
+                                ["rating"] = friend.rating,
+                                ["status"] = friend.status,
+                                ["lastOnline"] = friend.lastOnline
+                            };
+                            friends.Add(friendDict);
+                        }
+                        data["friends"] = friends;
+                        GD.Print($"获取到 {friends.Count} 个好友");
+                    }
+                    
+                    result["data"] = data;
+                }
+            }
+            tcs.TrySetResult(result);
+        }
+        catch (Exception e)
+        {
+            tcs.TrySetException(e);
+            GD.PrintErr($"解析响应失败: {e.Message}");
+        }
+    }
+
     // 响应数据类型定义
     private class ResponseData
     {
         public bool success { get; set; }
         public ResponseDataContent data { get; set; }
+        public string error { get; set; }
     }
 
     private class ResponseDataContent
     {
         public Friend[] friends { get; set; }
+        public string message { get; set; }
     }
 
     private class Friend
