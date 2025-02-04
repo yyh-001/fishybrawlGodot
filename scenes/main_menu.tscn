@@ -146,4 +146,84 @@ size_flags_vertical = 3
 visible = false
 item_count = 1
 item_0/text = "删除好友"
-item_0/id = 0 
+item_0/id = 0
+
+[node name="AddFriendDialog" type="Window" parent="."]
+title = "添加好友"
+size = Vector2i(400, 300)
+visible = false
+unresizable = true
+min_size = Vector2i(400, 300)
+initial_position = 2
+exclusive = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="AddFriendDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="MyUserIdContainer" type="HBoxContainer" parent="AddFriendDialog/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="AddFriendDialog/VBoxContainer/MyUserIdContainer"]
+layout_mode = 2
+text = "我的ID:"
+
+[node name="MyUserIdLabel" type="Label" parent="AddFriendDialog/VBoxContainer/MyUserIdContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "loading..."
+mouse_filter = 1
+text_overrun_behavior = 3
+
+[node name="CopyButton" type="Button" parent="AddFriendDialog/VBoxContainer/MyUserIdContainer"]
+layout_mode = 2
+text = "复制"
+
+[node name="HSeparator" type="HSeparator" parent="AddFriendDialog/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="UserIdContainer" type="VBoxContainer" parent="AddFriendDialog/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="AddFriendDialog/VBoxContainer/UserIdContainer"]
+layout_mode = 2
+text = "用户ID:"
+
+[node name="UserIdInput" type="LineEdit" parent="AddFriendDialog/VBoxContainer/UserIdContainer"]
+layout_mode = 2
+placeholder_text = "请输入要添加的用户ID"
+
+[node name="MessageContainer" type="VBoxContainer" parent="AddFriendDialog/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="AddFriendDialog/VBoxContainer/MessageContainer"]
+layout_mode = 2
+text = "附加消息:"
+
+[node name="MessageInput" type="TextEdit" parent="AddFriendDialog/VBoxContainer/MessageContainer"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+placeholder_text = "请输入附加消息（可选）"
+
+[node name="ButtonContainer" type="HBoxContainer" parent="AddFriendDialog/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="SendButton" type="Button" parent="AddFriendDialog/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "发送"
+
+[node name="CancelButton" type="Button" parent="AddFriendDialog/VBoxContainer/ButtonContainer"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "取消" 

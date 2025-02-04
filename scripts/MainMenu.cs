@@ -18,6 +18,13 @@ public partial class MainMenu : Control
     private Button _refreshFriendListButton;
     private PopupMenu _friendPopupMenu;
     private Dictionary<int, string> _friendIdMap = new Dictionary<int, string>();  // 用于存储列表索引到好友ID的映射
+    private Window _addFriendDialog;
+    private LineEdit _userIdInput;
+    private TextEdit _messageInput;
+    private Button _sendFriendRequestButton;
+    private Button _cancelFriendRequestButton;
+    private Label _myUserIdLabel;
+    private Button _copyUserIdButton;
 
     public override async void _Ready()
     {
@@ -36,6 +43,17 @@ public partial class MainMenu : Control
         // 获取右键菜单引用
         _friendPopupMenu = GetNode<PopupMenu>("HBoxContainer/RightPanel/TabContainer/好友/FriendList/PopupMenu");
 
+        // 获取添加好友对话框的引用
+        _addFriendDialog = GetNode<Window>("AddFriendDialog");
+        _userIdInput = GetNode<LineEdit>("AddFriendDialog/VBoxContainer/UserIdContainer/UserIdInput");
+        _messageInput = GetNode<TextEdit>("AddFriendDialog/VBoxContainer/MessageContainer/MessageInput");
+        _sendFriendRequestButton = GetNode<Button>("AddFriendDialog/VBoxContainer/ButtonContainer/SendButton");
+        _cancelFriendRequestButton = GetNode<Button>("AddFriendDialog/VBoxContainer/ButtonContainer/CancelButton");
+
+        // 获取用户ID显示相关节点
+        _myUserIdLabel = GetNode<Label>("AddFriendDialog/VBoxContainer/MyUserIdContainer/MyUserIdLabel");
+        _copyUserIdButton = GetNode<Button>("AddFriendDialog/VBoxContainer/MyUserIdContainer/CopyButton");
+
         // 连接按钮信号
         _quickMatchButton.Pressed += OnQuickMatchPressed;
         _createRoomButton.Pressed += OnCreateRoomPressed;
@@ -48,6 +66,14 @@ public partial class MainMenu : Control
         // 连接右键菜单信号
         _friendList.GuiInput += OnFriendListGuiInput;
         _friendPopupMenu.IdPressed += OnFriendPopupMenuItemSelected;
+
+        // 连接对话框按钮信号
+        _sendFriendRequestButton.Pressed += OnSendFriendRequestPressed;
+        _cancelFriendRequestButton.Pressed += OnCancelFriendRequestPressed;
+        _addFriendDialog.CloseRequested += OnCancelFriendRequestPressed;
+
+        // 连接复制按钮信号
+        _copyUserIdButton.Pressed += OnCopyUserIdPressed;
 
         // 更新用户信息显示
         UpdateUserInfo();
@@ -156,8 +182,19 @@ public partial class MainMenu : Control
             ShowError("未连接到服务器");
             return;
         }
-        GD.Print("添加好友");
-        // TODO: 实现添加好友逻辑
+        
+        // 清空输入框
+        _userIdInput.Text = "";
+        _messageInput.Text = "";
+        
+        // 设置当前用户ID
+        if (Global.Instance.UserInfo != null)
+        {
+            _myUserIdLabel.Text = Global.Instance.UserInfo.userId;
+        }
+        
+        // 显示对话框
+        _addFriendDialog.Popup();
     }
 
     private void OnInvitePressed()
@@ -299,6 +336,63 @@ public partial class MainMenu : Control
         {
             GD.PrintErr("删除好友失败:", e.Message);
             ShowError("删除好友失败");
+        }
+    }
+
+    private async void OnSendFriendRequestPressed()
+    {
+        var userId = _userIdInput.Text.Trim();
+        if (string.IsNullOrEmpty(userId))
+        {
+            ShowError("请输入用户ID");
+            return;
+        }
+
+        try
+        {
+            var requestData = new Dictionary<string, string>
+            {
+                ["toUserId"] = userId
+            };
+
+            var message = _messageInput.Text.Trim();
+            if (!string.IsNullOrEmpty(message))
+            {
+                requestData["message"] = message;
+            }
+
+            var response = await WebSocketManager.Instance.EmitAsync("sendFriendRequest", requestData);
+            
+            if (response.TryGetValue("success", out var successValue) && (bool)successValue)
+            {
+                GD.Print("好友请求发送成功");
+                _addFriendDialog.Hide();
+            }
+            else
+            {
+                string errorMessage = response.ContainsKey("error") ? 
+                    (string)response["error"] : "发送好友请求失败";
+                ShowError(errorMessage);
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr("发送好友请求失败:", e.Message);
+            ShowError("发送好友请求失败");
+        }
+    }
+
+    private void OnCancelFriendRequestPressed()
+    {
+        _addFriendDialog.Hide();
+    }
+
+    private void OnCopyUserIdPressed()
+    {
+        if (Global.Instance.UserInfo != null)
+        {
+            DisplayServer.ClipboardSet(Global.Instance.UserInfo.userId);
+            GD.Print("用户ID已复制到剪贴板");
         }
     }
 } 
