@@ -94,18 +94,18 @@ public partial class MainMenu : Control
         // 连接 WebSocket
         try 
         {
-            await WebSocketManager.Instance.ConnectAsync();
+            // 确保 WebSocket 已连接
+            await Global.Instance.InitializeWebSocket();
+
+        // 更新用户信息显示
+        UpdateUserInfo();
             
-            // 更新用户信息显示
-            UpdateUserInfo();
-            
-            // 连接成功后注册事件监听
+            // 注册事件监听
             GD.Print("开始注册 Socket.IO 事件监听器...");
             
             WebSocketManager.Instance.Socket.On("friendRequestReceived", response =>
             {
                 GD.Print("触发好友请求事件监听器");
-                // 在主线程中处理UI更新
                 Callable.From(() => OnFriendRequestReceived(response)).CallDeferred();
             });
 
@@ -115,17 +115,20 @@ public partial class MainMenu : Control
                 Callable.From(() => OnFriendRequestHandled(response)).CallDeferred();
             });
             
+            WebSocketManager.Instance.Socket.On("matchFound", response =>
+            {
+                GD.Print("触发匹配成功事件监听器");
+                Callable.From(() => OnMatchFound(response)).CallDeferred();
+            });
+            
             GD.Print("Socket.IO 事件监听器注册完成");
             
-            // 禁用按钮直到连接成功
             SetButtonsEnabled(true);
-            
-            // WebSocket 连接成功后获取好友列表
             await GetFriendList();
         }
         catch (Exception e)
         {
-            GD.PrintErr("WebSocket 连接失败:", e.Message);
+            GD.PrintErr("初始化失败:", e.Message);
             ShowError("连接服务器失败，请重试");
             SetButtonsEnabled(false);
         }
@@ -135,16 +138,14 @@ public partial class MainMenu : Control
     {
         base._ExitTree();
         
-        // 取消注册事件监听器
+        // 只取消注册当前场景的事件监听器
         if (WebSocketManager.Instance.Socket != null)
         {
-            GD.Print("取消注册 Socket.IO 事件监听器");
+            GD.Print("取消注册主菜单的 Socket.IO 事件监听器");
             WebSocketManager.Instance.Socket.Off("friendRequestReceived");
             WebSocketManager.Instance.Socket.Off("friendRequestHandled");
+            WebSocketManager.Instance.Socket.Off("matchFound");
         }
-        
-        // 断开 WebSocket 连接
-        WebSocketManager.Instance.Disconnect();
     }
 
     private void SetButtonsEnabled(bool enabled)
@@ -172,15 +173,143 @@ public partial class MainMenu : Control
         }
     }
 
-    private void OnQuickMatchPressed()
+    private async void OnQuickMatchPressed()
     {
         if (!WebSocketManager.Instance.IsConnected)
         {
             ShowError("未连接到服务器");
             return;
         }
-        GD.Print("快速匹配");
-        // TODO: 实现快速匹配逻辑
+
+        try
+        {
+            _quickMatchButton.Text = "匹配中...";
+            _quickMatchButton.Disabled = true;
+
+            var response = await WebSocketManager.Instance.EmitAsync("startMatching");
+            GD.Print("匹配响应数据:", response.ToString());
+            
+            if (response.TryGetValue("success", out var successValue) && (bool)successValue)
+            {
+                if (response.TryGetValue("data", out var dataValue))
+                {
+                    var data = dataValue.AsGodotDictionary();
+                    
+                    GD.Print($"===== 开始匹配 =====");
+                    if (data.ContainsKey("userId"))
+                        GD.Print($"用户ID: {data["userId"].AsString()}");
+                    if (data.ContainsKey("rating"))
+                        GD.Print($"积分: {data["rating"].AsInt32()}");
+                    if (data.ContainsKey("status"))
+                        GD.Print($"状态: {data["status"].AsString()}");
+                    if (data.ContainsKey("startTime"))
+                        GD.Print($"开始时间: {data["startTime"].AsString()}");
+                    GD.Print("===================");
+                }
+                else
+                {
+                    GD.PrintErr("匹配响应中缺少 data 字段");
+                }
+            }
+            else
+            {
+                string errorMessage = response.ContainsKey("error") ? 
+                    (string)response["error"] : "开始匹配失败";
+                ShowError(errorMessage);
+                ResetMatchButton();
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"开始匹配失败: {e.Message}");
+            GD.PrintErr($"错误堆栈: {e.StackTrace}");
+            ShowError("开始匹配失败");
+            ResetMatchButton();
+        }
+    }
+
+    private void ResetMatchButton()
+    {
+        _quickMatchButton.Text = "快速匹配";
+        _quickMatchButton.Disabled = false;
+    }
+
+    private async void OnMatchFound(SocketIOClient.SocketIOResponse response)
+    {
+        try
+        {
+            GD.Print("收到匹配成功数据:", response.GetValue<object>().ToString());
+            
+            var data = response.GetValue<JsonElement>(0);
+            var success = data.GetProperty("success").GetBoolean();
+            var roomId = data.GetProperty("roomId").GetString();
+
+            GD.Print($"===== 匹配成功 =====");
+            GD.Print($"房间ID: {roomId}");
+            GD.Print("===================");
+
+            // 加入房间
+            var joinRoomData = new Dictionary<string, string>
+            {
+                ["roomId"] = roomId
+            };
+
+            GD.Print("正在加入房间...");
+            var joinResponse = await WebSocketManager.Instance.EmitAsync("joinRoom", joinRoomData);
+
+            if (joinResponse.TryGetValue("success", out var joinSuccess) && (bool)joinSuccess)
+            {
+                var joinData = joinResponse["data"].AsGodotDictionary();
+                
+                GD.Print($"===== 加入房间成功 =====");
+                
+                // 检查并打印房间信息
+                if (joinData.ContainsKey("roomId"))
+                    GD.Print($"房间ID: {joinData["roomId"]}");
+                if (joinData.ContainsKey("name"))
+                    GD.Print($"房间名称: {joinData["name"]}");
+                if (joinData.ContainsKey("maxPlayers"))
+                    GD.Print($"最大玩家数: {joinData["maxPlayers"]}");
+                if (joinData.ContainsKey("status"))
+                    GD.Print($"房间状态: {joinData["status"]}");
+                
+                // 检查并打印玩家列表
+                if (joinData.ContainsKey("players"))
+                {
+                    var players = joinData["players"].AsGodotArray();
+                    GD.Print("\n当前玩家列表:");
+                    foreach (var player in players)
+                    {
+                        var playerData = player.AsGodotDictionary();
+                        string username = playerData.ContainsKey("username") ? playerData["username"].AsString() : "未知";
+                        bool ready = playerData.ContainsKey("ready") ? playerData["ready"].AsBool() : false;
+                        bool isCreator = playerData.ContainsKey("isCreator") ? playerData["isCreator"].AsBool() : false;
+                        
+                        GD.Print($"- {username} (准备状态: {ready}, 房主: {isCreator})");
+                    }
+                }
+                
+                GD.Print("=======================");
+
+                // 存储房间ID
+                Global.Instance.CurrentRoomId = roomId;
+
+                // 切换到游戏场景
+                GetTree().ChangeSceneToFile("res://scenes/game.tscn");
+            }
+            else
+            {
+                string errorMessage = joinResponse.ContainsKey("error") ? 
+                    (string)joinResponse["error"] : "加入房间失败";
+                throw new Exception(errorMessage);
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"处理匹配成功失败: {e.Message}");
+            GD.PrintErr($"错误堆栈: {e.StackTrace}");
+            ResetMatchButton();
+        }
     }
 
     private void OnCreateRoomPressed()
@@ -207,12 +336,8 @@ public partial class MainMenu : Control
 
     private void OnLogoutPressed()
     {
-        // 断开 WebSocket 连接
-        WebSocketManager.Instance.Disconnect();
-        
-        // 清除用户信息
-        Global.Instance.Token = null;
-        Global.Instance.UserInfo = null;
+        // 清理所有数据
+        Global.Instance.Cleanup();
 
         // 返回登录界面
         GetTree().ChangeSceneToFile("res://scenes/login.tscn");

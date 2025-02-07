@@ -5,6 +5,8 @@ using SocketIOClient.Transport;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using System.Linq;
 
 /// <summary>
 /// WebSocket 管理器，处理与服务器的 Socket.IO 连接
@@ -177,8 +179,13 @@ public class WebSocketManager
             var result = new Godot.Collections.Dictionary();
             if (response != null)
             {
-                // 解析响应数据
+                // 打印原始响应数据
                 var responseData = response.GetValue<JsonElement>(0);
+                GD.Print("===== Socket.IO 响应原始数据 =====");
+                GD.Print(responseData.GetRawText());
+                GD.Print("================================");
+
+                // 解析响应数据
                 var jsonString = responseData.ToString();
                 var responseObj = JsonSerializer.Deserialize<ResponseData>(jsonString);
                 
@@ -197,14 +204,67 @@ public class WebSocketManager
                 {
                     var data = new Godot.Collections.Dictionary();
                     
-                    // 处理服务器消息
+                    // 处理刷新商店响应
+                    if (responseObj.data.minions != null)
+                    {
+                        GD.Print("\n解析商店数据:");
+                        var minionsArray = new Godot.Collections.Array();
+                        foreach (var minion in responseObj.data.minions)
+                        {
+                            var minionDict = new Godot.Collections.Dictionary
+                            {
+                                ["_id"] = minion._id,
+                                ["name"] = minion.name,
+                                ["attack"] = minion.attack,
+                                ["health"] = minion.health,
+                                ["tier"] = minion.tier,
+                                ["tribe"] = minion.tribe,
+                                ["abilities"] = new Godot.Collections.Array(
+                                    (minion.abilities ?? Array.Empty<string>())
+                                    .Select(x => Variant.CreateFrom(x))
+                                    .ToArray()
+                                ),
+                                ["description"] = minion.description
+                            };
+                            minionsArray.Add(minionDict);
+                            
+                            GD.Print($"\n随从数据:");
+                            GD.Print($"- ID: {minion._id}");
+                            GD.Print($"- 名称: {minion.name}");
+                            GD.Print($"- 攻击力: {minion.attack}");
+                            GD.Print($"- 生命值: {minion.health}");
+                            GD.Print($"- 等级: {minion.tier}");
+                            GD.Print($"- 种族: {minion.tribe}");
+                            GD.Print($"- 描述: {minion.description}");
+                        }
+                        data["minions"] = minionsArray;
+                        
+                        if (responseObj.data.remainingCoins.HasValue)
+                        {
+                            data["remainingCoins"] = responseObj.data.remainingCoins.Value;
+                            GD.Print($"\n剩余金币: {responseObj.data.remainingCoins.Value}");
+                        }
+                    }
+
+                    // 处理英雄选择响应
+                    if (responseObj.data.userId != null)
+                    {
+                        data["userId"] = responseObj.data.userId;
+                    }
+                    if (responseObj.data.heroId != null)
+                    {
+                        data["heroId"] = responseObj.data.heroId;
+                    }
+                    if (responseObj.data.allSelected.HasValue)
+                    {
+                        data["allSelected"] = responseObj.data.allSelected.Value;
+                    }
                     if (!string.IsNullOrEmpty(responseObj.data.message))
                     {
                         data["message"] = responseObj.data.message;
-                        GD.Print($"服务器消息: {responseObj.data.message}");
                     }
-                    
-                    // 处理好友列表数据
+
+                    // 处理好友列表
                     if (responseObj.data.friends != null)
                     {
                         var friends = new Godot.Collections.Array();
@@ -221,9 +281,47 @@ public class WebSocketManager
                             friends.Add(friendDict);
                         }
                         data["friends"] = friends;
-                        GD.Print($"获取到 {friends.Count} 个好友");
                     }
-                    
+
+                    // 处理英雄列表
+                    if (responseObj.data.heroes != null)
+                    {
+                        var heroes = JsonSerializer.Deserialize<Hero[]>(responseObj.data.heroes.ToString());
+                        var heroArray = new Godot.Collections.Array();
+                        foreach (var hero in heroes)
+                        {
+                            var heroDict = new Godot.Collections.Dictionary
+                            {
+                                ["id"] = hero.id,
+                                ["name"] = hero.name,
+                                ["description"] = hero.description,
+                                ["health"] = hero.health,
+                                ["ability"] = new Godot.Collections.Dictionary
+                                {
+                                    ["name"] = hero.ability_name,
+                                    ["description"] = hero.ability_description,
+                                    ["type"] = hero.ability_type,
+                                    ["cost"] = hero.ability_cost,
+                                    ["effect"] = hero.ability_effect
+                                }
+                            };
+                            heroArray.Add(heroDict);
+                        }
+                        data["heroes"] = heroArray;
+                        
+                        // 添加选择时间限制
+                        if (responseObj.data.selectionTimeLimit.HasValue)
+                        {
+                            data["selectionTimeLimit"] = responseObj.data.selectionTimeLimit.Value;
+                        }
+                    }
+
+                    // 处理时间戳
+                    if (!string.IsNullOrEmpty(responseObj.data.timestamp))
+                    {
+                        data["timestamp"] = responseObj.data.timestamp;
+                    }
+
                     result["data"] = data;
                 }
             }
@@ -233,6 +331,7 @@ public class WebSocketManager
         {
             tcs.TrySetException(e);
             GD.PrintErr($"解析响应失败: {e.Message}");
+            GD.PrintErr($"错误堆栈: {e.StackTrace}");
         }
     }
 
@@ -246,8 +345,18 @@ public class WebSocketManager
 
     private class ResponseDataContent
     {
+        public Minion[] minions { get; set; }
+        public int? remainingCoins { get; set; }
         public Friend[] friends { get; set; }
+        public object heroes { get; set; }
         public string message { get; set; }
+        public string timestamp { get; set; }
+        public int? selectionTimeLimit { get; set; }
+        
+        // 添加英雄选择响应字段
+        public string userId { get; set; }
+        public string heroId { get; set; }
+        public bool? allSelected { get; set; }
     }
 
     private class Friend
@@ -257,5 +366,31 @@ public class WebSocketManager
         public int rating { get; set; }
         public string status { get; set; }
         public string lastOnline { get; set; }
+    }
+
+    private class Hero
+    {
+        [JsonPropertyName("_id")]
+        public string id { get; set; }
+        public string name { get; set; }
+        public string description { get; set; }
+        public int health { get; set; }
+        public string ability_name { get; set; }
+        public string ability_description { get; set; }
+        public string ability_type { get; set; }
+        public int ability_cost { get; set; }
+        public string ability_effect { get; set; }
+    }
+
+    private class Minion
+    {
+        public string _id { get; set; }
+        public string name { get; set; }
+        public int attack { get; set; }
+        public int health { get; set; }
+        public int tier { get; set; }
+        public string tribe { get; set; }
+        public string[] abilities { get; set; }
+        public string description { get; set; }
     }
 } 

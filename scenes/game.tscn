@@ -1,0 +1,198 @@
+[gd_scene load_steps=2 format=3 uid="uid://bpcrtpbvcjgva"]
+
+[ext_resource type="Script" path="res://scripts/Game.cs" id="1_game"]
+
+[node name="Game" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_game")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.117647, 0.117647, 0.117647, 1)
+
+[node name="GameUI" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ShopArea" type="VBoxContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = -1.0
+offset_top = -1.0
+offset_right = -1.0
+offset_bottom = 199.0
+grow_horizontal = 2
+
+[node name="TopBar" type="HBoxContainer" parent="GameUI/ShopArea"]
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="CoinsLabel" type="Label" parent="GameUI/ShopArea/TopBar"]
+layout_mode = 2
+text = "金币: 10"
+
+[node name="TavernTierLabel" type="Label" parent="GameUI/ShopArea/TopBar"]
+layout_mode = 2
+text = "酒馆等级: 1"
+
+[node name="MenuButton" type="Button" parent="GameUI/ShopArea/TopBar"]
+layout_mode = 2
+text = "菜单"
+
+[node name="ShopCards" type="HBoxContainer" parent="GameUI/ShopArea"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BottomBar" type="HBoxContainer" parent="GameUI"]
+layout_mode = 2
+offset_left = 463.0
+offset_top = 200.0
+offset_right = 687.0
+offset_bottom = 231.0
+size_flags_horizontal = 4
+
+[node name="UpgradeButton" type="Button" parent="GameUI/BottomBar"]
+layout_mode = 2
+text = "升级酒馆"
+
+[node name="RefreshButton" type="Button" parent="GameUI/BottomBar"]
+layout_mode = 2
+text = "刷新商店"
+
+[node name="FreezeButton" type="Button" parent="GameUI/BottomBar"]
+layout_mode = 2
+text = "锁定商店"
+
+[node name="BattleArea" type="HBoxContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_top = -96.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PlayersList" type="VBoxContainer" parent="GameUI/BattleArea"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+
+[node name="Battlefield" type="VBoxContainer" parent="GameUI/BattleArea"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UpperRow" type="HBoxContainer" parent="GameUI/BattleArea/Battlefield"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LowerRow" type="HBoxContainer" parent="GameUI/BattleArea/Battlefield"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HandArea" type="HBoxContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -130.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Cards" type="Control" parent="GameUI/HandArea"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(0, 120)
+
+[node name="PlayerInfo" type="VBoxContainer" parent="GameUI"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+offset_left = 1052.0
+offset_top = 481.0
+offset_right = 1152.0
+offset_bottom = 648.0
+
+[node name="Avatar" type="TextureRect" parent="GameUI/PlayerInfo"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HealthLabel" type="Label" parent="GameUI/PlayerInfo"]
+layout_mode = 2
+text = "生命值: 40"
+
+[node name="HeroSelectDialog" type="Window" parent="."]
+title = "选择英雄"
+initial_position = 2
+size = Vector2i(800, 500)
+visible = false
+exclusive = true
+unresizable = true
+
+[node name="MarginContainer" type="MarginContainer" parent="HeroSelectDialog"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HeroSelectDialog/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Label" type="Label" parent="HeroSelectDialog/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "请选择你的英雄"
+horizontal_alignment = 1
+
+[node name="HeroGrid" type="GridContainer" parent="HeroSelectDialog/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 20
+columns = 2
+
+[node name="Hero1" type="Button" parent="HeroSelectDialog/MarginContainer/VBoxContainer/HeroGrid"]
+custom_minimum_size = Vector2(370, 180)
+layout_mode = 2
+text = "英雄1"
+
+[node name="Hero2" type="Button" parent="HeroSelectDialog/MarginContainer/VBoxContainer/HeroGrid"]
+custom_minimum_size = Vector2(370, 180)
+layout_mode = 2
+text = "英雄2"
+
+[node name="Hero3" type="Button" parent="HeroSelectDialog/MarginContainer/VBoxContainer/HeroGrid"]
+custom_minimum_size = Vector2(370, 180)
+layout_mode = 2
+text = "英雄3"
+
+[node name="Hero4" type="Button" parent="HeroSelectDialog/MarginContainer/VBoxContainer/HeroGrid"]
+custom_minimum_size = Vector2(370, 180)
+layout_mode = 2
+text = "英雄4"
+
+[node name="TimerLabel" type="Label" parent="HeroSelectDialog/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "剩余时间: 30秒"
+horizontal_alignment = 1

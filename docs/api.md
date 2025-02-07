@@ -138,7 +138,7 @@
 - 请求体:
 ```json
 {
-    "email": "string",
+    "username": "string",
     "password": "string"
 }
 ```
@@ -223,6 +223,41 @@
 {
     "code": 200,
     "message": "匹配已取消"
+}
+```
+### 认证相关接口
+
+#### 验证Token
+- **GET** `/api/auth/verify`
+- 请求头: `Authorization: Bearer {token}`
+- 响应:
+```json
+{
+    "code": 200,
+    "message": "Token验证成功",
+    "data": {
+        "userId": "string",
+        "username": "string",
+        "email": "string",
+        "status": "online|offline|in_game"
+    }
+}
+```
+
+- 错误响应:
+```json
+{
+    "code": 401,
+    "message": "未提供有效的认证令牌",
+    "data": null
+}
+```
+或
+```json
+{
+    "code": 401,
+    "message": "认证令牌已过期",
+    "data": null
 }
 ```
 
@@ -1514,6 +1549,88 @@ socket.emit('selectHero', {
 }
 ```
 
+#### 1.3 确认英雄选择
+```javascript
+socket.emit('confirmHeroSelection', {
+    roomId: "507f1f77bcf86cd799439011",
+    heroId: "679de012ad7bd7c89ea3cc19"
+}, (response) => {
+    if (response.success) {
+        console.log('英雄选择确认成功:', response.data);
+    } else {
+        console.error('英雄选择失败:', response.error);
+    }
+});
+```
+
+**请求参数说明**:
+- roomId: 房间ID (必填)
+- heroId: 选择的英雄ID (必填)
+
+**成功响应**:
+```javascript
+{
+    success: true,
+    data: {
+        userId: "507f1f77bcf86cd799439012",
+        heroId: "679de012ad7bd7c89ea3cc19",
+        allSelected: false,  // 是否所有玩家都已选择英雄
+        message: "英雄选择成功"
+    }
+}
+```
+
+**错误响应**:
+```javascript
+{
+    success: false,
+    error: "错误信息" // 可能的错误信息
+}
+```
+
+**可能的错误**:
+- 房间不存在或您不在该房间中
+- 无效的英雄ID
+- 该英雄不在可选列表中
+- 已经选择过英雄
+- 选择时间已过
+
+**相关事件**:
+```javascript
+// 英雄选择更新事件
+socket.on('heroSelectionUpdated', (data) => {
+    console.log('英雄选择更新:', data);
+    // data 格式:
+    // {
+    //     userId: "507f1f77bcf86cd799439012",
+    //     heroId: "679de012ad7bd7c89ea3cc19",
+    //     allSelected: false  // 是否所有玩家都已选择英雄
+    // }
+});
+```
+
+**注意事项**:
+1. 选择规则：
+   - 每个玩家只能选择一次英雄
+   - 英雄不能重复选择
+   - 必须在时间限制内选择
+
+2. 选择流程：
+   - 收到可选英雄列表
+   - 在时间限制内确认选择
+   - 等待其他玩家选择
+   - 所有玩家选择完成后开始游戏
+
+3. 超时处理：
+   - 未在时间限制内选择将随机分配英雄
+   - 超时选择会触发警告
+   - 多次超时可能被惩罚
+
+4. 实时通知：
+   - 其他玩家的选择结果会实时通知
+   - 可以看到选择进度
+   - 选择阶段结束会通知所有玩家
+
 ### 2. 酒馆操作
 
 #### 2.1 升级酒馆
@@ -1709,26 +1826,6 @@ socket.emit('useHeroPower', {
 }, (response) => {
     console.log(response);
 });
-```
-
-**成功响应**:
-```javascript
-{
-    success: true,
-    data: {
-        heroPowerUsed: true,
-        remainingCoins: 8,
-        effect: {
-            type: "buff",
-            target: "minion1",
-            changes: {
-                attack: 1,
-                health: 1
-            }
-        },
-        boardState: [] // 更新后的场上状态
-    }
-}
 ```
 
 ### 6. 游戏状态事件
